@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Zambia – Cholera status by district</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body, #map { height: 100%; margin: 0; }
+  .control-panel {
+    position: absolute; top: 10px; left: 10px; z-index: 9999;
+    background: rgba(255,255,255,0.95); padding: 10px 12px; border-radius: 10px;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  }
+  .leaflet-container { background: #f8f9fa; }
+  .prov-label { font: 700 12px/1.1 Inter, system-ui, sans-serif; color:#222; text-shadow: 0 1px 2px #fff; }
+  .lake-label { font: 600 12px/1.1 Inter, system-ui, sans-serif; color:#1F5DAE; text-shadow: 0 1px 2px #fff; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .row label { font-size: 13px; }
+  #yrval { font-weight: 700; }
+</style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<div class="control-panel">
+  <div class="row">
+    <label for="year">Year:</label>
+    <input id="year" type="range" min="1" max="7" step="1" value="1" />
+    <span id="yrval">1</span>
+  </div>
+  <div class="row"><input id="ck-prov"  type="checkbox" checked> <label for="ck-prov">Province labels</label></div>
+  <div class="row"><input id="ck-lake"  type="checkbox" checked> <label for="ck-lake">Lake labels</label></div>
+  <div class="row"><input id="ck-neigh" type="checkbox" checked> <label for="ck-neigh">Neighbour borders</label></div>
+  <div class="row"><input id="ck-riv"   type="checkbox" checked> <label for="ck-riv">Rivers</label></div>
+  <div class="row"><input id="ck-lakes" type="checkbox" checked> <label for="ck-lakes">Lakes</label></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const YEARS = [1,2,3,4,5,6,7];
+
+  let map, districtsLayer, provLabelLayer, lakeLabelLayer, neighLayer, riversLayer, lakesLayer;
+
+  function statusColor(s){
+    if (s === "Eliminated") return "seashell";
+    if (s === "Endemic")    return "tomato";
+    if (s === "No data")    return "#e5e5e5";
+    return "#cccccc";
+  }
+
+  function initMap(){
+    map = L.map("map").setView([-13.1, 27.8], 5);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18, attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    // Overlays: load if present, ignore if missing
+    fetch("geo/neigh_borders.geojson").then(r => r.ok ? r.json() : null).then(j => {
+      if (j) neighLayer = L.geoJSON(j, {style:{color:"#6f6f6f",weight:0.8}}).addTo(map);
+    });
+    fetch("geo/rivers.geojson").then(r => r.ok ? r.json() : null).then(j => {
+      if (j) riversLayer = L.geoJSON(j, {style:{color:"#1F5DAE",weight:1.2,opacity:0.9}}).addTo(map);
+    });
+    fetch("geo/lakes.geojson").then(r => r.ok ? r.json() : null).then(j => {
+      if (j) lakesLayer  = L.geoJSON(j, {style:{color:"#1F5DAE",weight:0,fillColor:"#1F5DAE",fillOpacity:0.65}}).addTo(map);
+    });
+
+    // Province and lake labels
+    fetch("geo/province_labels.geojson").then(r => r.ok ? r.json() : null).then(j => {
+      if (j) provLabelLayer = L.geoJSON(j, {
+        pointToLayer: (f, latlng) => L.marker(latlng, { icon: L.divIcon({className:"prov-label", html: f.properties.name}) })
+      }).addTo(map);
+    });
+    fetch("geo/lake_labels.geojson").then(r => r.ok ? r.json() : null).then(j => {
+      if (j) lakeLabelLayer = L.geoJSON(j, {
+        pointToLayer: (f, latlng) => L.marker(latlng, { icon: L.divIcon({className:"lake-label", html: (f.properties.lake || f.properties.name || "")}) })
+      }).addTo(map);
+    });
+
+    // checkbox toggles
+    const toggle = (id, layerRef) => {
+      const el = document.getElementById(id);
+      el.addEventListener("change", () => {
+        const layer = eval(layerRef);
+        if (!layer) return;
+        if (el.checked) { map.addLayer(layer); } else { map.removeLayer(layer); }
+      });
+    };
+    toggle("ck-prov",  "provLabelLayer");
+    toggle("ck-lake",  "lakeLabelLayer");
+    toggle("ck-neigh", "neighLayer");
+    toggle("ck-riv",   "riversLayer");
+    toggle("ck-lakes", "lakesLayer");
+  }
+
+  async function loadYear(y){
+    if (!map) initMap();
+    if (districtsLayer) map.removeLayer(districtsLayer);
+    const resp = await fetch(`geo/districts_${y}.geojson`);
+    if (!resp.ok) { console.warn("Missing GeoJSON for year", y); return; }
+    const geo  = await resp.json();
+    districtsLayer = L.geoJSON(geo, {
+      style: f => ({ color:"#666", weight:0.5, fillOpacity:0.8, fillColor: statusColor(f.properties.status) }),
+      onEachFeature: (f, layer) => {
+        const name = f.properties.District || f.properties.NAME_2 || f.properties.name || "";
+        layer.bindPopup(`<b>${name}</b><br>Status: ${f.properties.status}<br>Year: ${y}`);
+      }
+    }).addTo(map);
+    try { map.fitBounds(districtsLayer.getBounds(), {padding:[10,10]}); } catch(e) {}
+  }
+
+  // wire slider
+  document.addEventListener("DOMContentLoaded", () => {
+    initMap();
+    const slider = document.getElementById("year");
+    const yrval  = document.getElementById("yrval");
+    slider.min   = Math.min(...YEARS);
+    slider.max   = Math.max(...YEARS);
+    slider.value = 1;
+    yrval.textContent = slider.value;
+    loadYear(slider.value);
+    slider.addEventListener("input", () => {
+      yrval.textContent = slider.value;
+      loadYear(slider.value);
+    });
+  });
+</script>
+</body>
+</html>
+

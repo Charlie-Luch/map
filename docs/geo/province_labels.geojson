@@ -1,0 +1,17 @@
+{
+"type": "FeatureCollection",
+"name": "province_labels",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "Central" }, "geometry": { "type": "Point", "coordinates": [ 28.583712612643676, -14.2800763 ] } },
+{ "type": "Feature", "properties": { "name": "Copperbelt" }, "geometry": { "type": "Point", "coordinates": [ 27.950931233333336, -13.0895263 ] } },
+{ "type": "Feature", "properties": { "name": "Eastern" }, "geometry": { "type": "Point", "coordinates": [ 32.309496857142854, -13.28713415 ] } },
+{ "type": "Feature", "properties": { "name": "Luapula" }, "geometry": { "type": "Point", "coordinates": [ 29.038513382360428, -10.41470335 ] } },
+{ "type": "Feature", "properties": { "name": "Lusaka" }, "geometry": { "type": "Point", "coordinates": [ 29.003822035315132, -15.5364776 ] } },
+{ "type": "Feature", "properties": { "name": "Muchinga" }, "geometry": { "type": "Point", "coordinates": [ 32.048347435041151, -11.24619705 ] } },
+{ "type": "Feature", "properties": { "name": "North Western" }, "geometry": { "type": "Point", "coordinates": [ 25.410641297997159, -12.8088763 ] } },
+{ "type": "Feature", "properties": { "name": "Northern" }, "geometry": { "type": "Point", "coordinates": [ 31.054973656249999, -9.8889574 ] } },
+{ "type": "Feature", "properties": { "name": "Southern" }, "geometry": { "type": "Point", "coordinates": [ 26.713937726620472, -16.7980263 ] } },
+{ "type": "Feature", "properties": { "name": "Western" }, "geometry": { "type": "Point", "coordinates": [ 23.62063972019951, -15.6868763 ] } }
+]
+}
