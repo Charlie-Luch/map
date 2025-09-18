@@ -41,15 +41,47 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  const YEARS = [1,2,3,4,5,6,7];
+  // ---- EDIT THIS to match your actual years ----
+  const YEARS = [2018,2019,2020,2021,2022,2023,2024];
 
-  let map, districtsLayer, provLabelLayer, lakeLabelLayer, neighLayer, riversLayer, lakesLayer;
+  // Accept multiple possible property names
+  const STATUS_KEYS  = ["status","Status","STATUS","cholera_status","Status_txt"];
+  const NAME_KEYS    = ["District","district","DISTRICT","NAME_2","ADM2_NAME","ADM2","name","NAME"];
+
+  function pickProp(obj, keys, fallback = "") {
+    if (!obj) return fallback;
+    for (const k of keys) {
+      if (Object.hasOwn(obj, k) && obj[k] != null) return String(obj[k]);
+    }
+    return fallback;
+  }
 
   function statusColor(s){
     if (s === "Eliminated") return "seashell";
     if (s === "Endemic")    return "tomato";
     if (s === "No data")    return "#e5e5e5";
-    return "#cccccc";
+    return "#cccccc"; // fallback
+  }
+
+  let map, districtsLayer, provLabelLayer, lakeLabelLayer, neighLayer, riversLayer, lakesLayer;
+
+  function addLegend(){
+    const ctrl = L.control({position:"bottomright"});
+    ctrl.onAdd = function(){
+      const div = L.DomUtil.create("div","leaflet-control leaflet-bar");
+      div.style.background = "white";
+      div.style.padding = "8px 10px";
+      div.style.borderRadius = "8px";
+      div.style.font = "12px/1.2 system-ui, sans-serif";
+      div.innerHTML = `
+        <div style="font-weight:700;margin-bottom:6px;">Status</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:${statusColor("Eliminated")};border:1px solid #666;margin-right:6px;"></span>Eliminated</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:${statusColor("Endemic")};border:1px solid #666;margin-right:6px;"></span>Endemic</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:${statusColor("No data")};border:1px solid #666;margin-right:6px;"></span>No data</div>
+      `;
+      return div;
+    };
+    ctrl.addTo(map);
   }
 
   function initMap(){
@@ -58,9 +90,9 @@
       maxZoom: 18, attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
 
-    // Overlays: load if present, ignore if missing
+    // Overlays (load if present; ignore if missing)
     fetch("geo/neigh_borders.geojson").then(r => r.ok ? r.json() : null).then(j => {
-      if (j) neighLayer = L.geoJSON(j, {style:{color:"#6f6f6f",weight:0.8}}).addTo(map);
+      if (j) neighLayer  = L.geoJSON(j, {style:{color:"#6f6f6f",weight:0.8}}).addTo(map);
     });
     fetch("geo/rivers.geojson").then(r => r.ok ? r.json() : null).then(j => {
       if (j) riversLayer = L.geoJSON(j, {style:{color:"#1F5DAE",weight:1.2,opacity:0.9}}).addTo(map);
@@ -69,7 +101,7 @@
       if (j) lakesLayer  = L.geoJSON(j, {style:{color:"#1F5DAE",weight:0,fillColor:"#1F5DAE",fillOpacity:0.65}}).addTo(map);
     });
 
-    // Province and lake labels
+    // Province & lake label points (DivIcon)
     fetch("geo/province_labels.geojson").then(r => r.ok ? r.json() : null).then(j => {
       if (j) provLabelLayer = L.geoJSON(j, {
         pointToLayer: (f, latlng) => L.marker(latlng, { icon: L.divIcon({className:"prov-label", html: f.properties.name}) })
@@ -81,51 +113,50 @@
       }).addTo(map);
     });
 
-    // checkbox toggles
-    const toggle = (id, layerRef) => {
-      const el = document.getElementById(id);
-      el.addEventListener("change", () => {
-        const layer = eval(layerRef);
-        if (!layer) return;
-        if (el.checked) { map.addLayer(layer); } else { map.removeLayer(layer); }
-      });
-    };
-    toggle("ck-prov",  "provLabelLayer");
-    toggle("ck-lake",  "lakeLabelLayer");
-    toggle("ck-neigh", "neighLayer");
-    toggle("ck-riv",   "riversLayer");
-    toggle("ck-lakes", "lakesLayer");
+    addLegend();
   }
 
   async function loadYear(y){
     if (!map) initMap();
     if (districtsLayer) map.removeLayer(districtsLayer);
-    const resp = await fetch(`geo/districts_${y}.geojson`);
-    if (!resp.ok) { console.warn("Missing GeoJSON for year", y); return; }
+
+    const url = `geo/districts_${y}.geojson`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.error("Missing GeoJSON:", url);
+      alert(`No data file found for year ${y}.\nI looked for ${url}.`);
+      return;
+    }
     const geo  = await resp.json();
+
     districtsLayer = L.geoJSON(geo, {
-      style: f => ({ color:"#666", weight:0.5, fillOpacity:0.8, fillColor: statusColor(f.properties.status) }),
+      style: f => {
+        const s = pickProp(f.properties, STATUS_KEYS, "No data");
+        return { color:"#666", weight:0.5, fillOpacity:0.8, fillColor: statusColor(s) };
+      },
       onEachFeature: (f, layer) => {
-        const name = f.properties.District || f.properties.NAME_2 || f.properties.name || "";
-        layer.bindPopup(`<b>${name}</b><br>Status: ${f.properties.status}<br>Year: ${y}`);
+        const s = pickProp(f.properties, STATUS_KEYS, "No data");
+        const n = pickProp(f.properties, NAME_KEYS, "");
+        layer.bindPopup(`<b>${n}</b><br>Status: ${s}<br>Year: ${y}`);
       }
     }).addTo(map);
+
     try { map.fitBounds(districtsLayer.getBounds(), {padding:[10,10]}); } catch(e) {}
   }
 
-  // wire slider
+  // Wire the slider to real years
   document.addEventListener("DOMContentLoaded", () => {
     initMap();
     const slider = document.getElementById("year");
     const yrval  = document.getElementById("yrval");
     slider.min   = Math.min(...YEARS);
     slider.max   = Math.max(...YEARS);
-    slider.value = 1;
+    slider.value = YEARS[0];
     yrval.textContent = slider.value;
-    loadYear(slider.value);
+    loadYear(Number(slider.value));
     slider.addEventListener("input", () => {
       yrval.textContent = slider.value;
-      loadYear(slider.value);
+      loadYear(Number(slider.value));
     });
   });
 </script>
